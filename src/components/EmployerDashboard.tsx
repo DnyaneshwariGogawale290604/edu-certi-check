@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { Upload, Search, CheckCircle, XCircle, Clock, Download, FileCheck, AlertCircle, Home } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -13,6 +13,66 @@ export const EmployerDashboard = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [dragActive, setDragActive] = useState(false);
   const navigate = useNavigate();
+
+  // ---- new state & refs ----
+const fileInputRef = useRef(null);
+const [selectedFile, setSelectedFile] = useState(null); // File | null
+const [verifying, setVerifying] = useState(false);
+const [verificationResult, setVerificationResult] = useState(null);
+
+// Trigger the hidden file input
+const handleSelectFile = () => {
+  fileInputRef.current?.click();
+};
+
+// When user selects a file from picker
+const handleFileChange = (e) => {
+  const f = e.target.files?.[0] ?? null;
+  setSelectedFile(f);
+  setVerificationResult(null); // clear previous result
+};
+
+// Update your existing handleDrop to set selectedFile
+// replace the inside of current handleDrop's if block with:
+// if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+//   setSelectedFile(e.dataTransfer.files[0]);
+// }
+
+// Verify: upload to backend
+const handleVerify = async () => {
+  if (!selectedFile) {
+    alert("Please select a file first.");
+    return;
+  }
+
+  setVerifying(true);
+  setVerificationResult(null);
+
+  try {
+    const formData = new FormData();
+    formData.append("certificate", selectedFile);
+
+    // backend endpoint - change if needed
+    const res = await fetch("http://localhost:5000/api/verify", {
+      method: "POST",
+      body: formData
+    });
+
+    if (!res.ok) throw new Error(`Server returned ${res.status}`);
+
+    const json = await res.json();
+    // expected shape: { status: 'Verified'|'Invalid'|'Pending', confidence: number, reportUrl?: string }
+    setVerificationResult(json);
+
+    // optional: show a toast or update the verificationHistory table (see notes below)
+  } catch (err) {
+    console.error("Verification failed", err);
+    alert("Verification failed. See console for details.");
+  } finally {
+    setVerifying(false);
+  }
+};
+
 
   const stats = [
     { title: "Certificates Verified", value: "1,247", icon: CheckCircle, color: "text-success" },
@@ -93,9 +153,13 @@ export const EmployerDashboard = () => {
     e.stopPropagation();
     setDragActive(false);
     
+    // if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+    //   // Handle file upload logic here
+    //   console.log("Files dropped:", e.dataTransfer.files);
+    // }
+
     if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-      // Handle file upload logic here
-      console.log("Files dropped:", e.dataTransfer.files);
+      setSelectedFile(e.dataTransfer.files[0]);
     }
   };
 
@@ -124,9 +188,17 @@ export const EmployerDashboard = () => {
               <Download className="h-4 w-4 mr-2" />
               Export Results
             </Button>
-            <Button className="bg-gradient-primary">
+            {/* <Button className="bg-gradient-primary">
               <Upload className="h-4 w-4 mr-2" />
               Verify Certificates
+            </Button> */}
+            <Button
+              className="bg-gradient-primary"
+              onClick={handleVerify}
+              disabled={verifying || !selectedFile}
+            >
+              <Upload className="h-4 w-4 mr-2" />
+              {verifying ? "Verifying..." : "Verify Certificates"}
             </Button>
           </div>
         </div>
@@ -182,8 +254,21 @@ export const EmployerDashboard = () => {
                   <p className="text-sm text-muted-foreground mb-4">
                     Supported formats: PDF, JPG, PNG (Max size: 10MB)
                   </p>
-                  <Button className="bg-gradient-primary">Select File</Button>
-                </div>
+                  <input
+                  type="file"
+                  accept=".pdf,.jpg,.jpeg,.png"
+                  ref={fileInputRef}
+                  className="hidden"
+                  onChange={handleFileChange}
+                  />
+                  <Button className="bg-gradient-primary" onClick={handleSelectFile}>Select File</Button>
+                  {selectedFile && (
+                    <div className="mt-3 flex items-center justify-center space-x-3">
+                      <p className="text-sm text-muted-foreground">Selected: {selectedFile.name}</p>
+                      <Button variant="ghost" size="sm" onClick={() => setSelectedFile(null)}>Remove</Button>
+                    </div>
+                  )}
+                  </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <Card className="p-4 bg-accent/5 border-accent/20">
